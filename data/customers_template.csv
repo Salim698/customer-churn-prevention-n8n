@@ -1,0 +1,2 @@
+id,name,email,plan,mrr,last_payment_status,days_until_renewal,logins_last_14_days,key_features_used,open_tickets,last_ticket_sentiment,signup_date,active_users,risk_emoji,risk_level,score_total,ai_diagnostic,ai_raison,ai_action,ai_message_client
+cust_001,TechFlow SaaS,customer1@example.com,Pro,299,failed,0,0,,3,very_negative,2023-06-15,0,,,,,,,
