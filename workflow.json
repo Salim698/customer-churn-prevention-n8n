@@ -1,0 +1,358 @@
+{
+  "name": "Customer Health Score & Churn Prevention - Gemini x Sheets x Gmail",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [-336, 560],
+      "id": "eeed1b13-741e-40a7-96e6-ccc027bc1fa5",
+      "name": "Schedule Trigger1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const customers = [\n  {\n    id: 'cust_001',\n    name: 'TechFlow SaaS',\n    email: 'customer1@example.com',\n    plan: 'Pro',\n    mrr: 299,\n    last_payment_status: 'failed',\n    days_until_renewal: 0,\n    logins_last_14_days: 0,\n    key_features_used: [],\n    open_tickets: 3,\n    last_ticket_sentiment: 'very_negative',\n    signup_date: '2023-06-15',\n    active_users: 0\n  },\n  {\n    id: 'cust_002',\n    name: 'StartupX',\n    email: 'customer2@example.com',\n    plan: 'Starter',\n    mrr: 99,\n    last_payment_status: 'failed',\n    days_until_renewal: 0,\n    logins_last_14_days: 0,\n    key_features_used: [],\n    open_tickets: 3,\n    last_ticket_sentiment: 'very_negative',\n    signup_date: '2024-01-10',\n    active_users: 0\n  },\n  {\n    id: 'cust_003',\n    name: 'CloudNova',\n    email: 'customer3@example.com',\n    plan: 'Enterprise',\n    mrr: 999,\n    last_payment_status: 'paid',\n    days_until_renewal: 60,\n    logins_last_14_days: 20,\n    key_features_used: ['dashboard', 'api', 'reports', 'integrations', 'alerts'],\n    open_tickets: 0,\n    last_ticket_sentiment: 'positive',\n    signup_date: '2022-03-01',\n    active_users: 42\n  },\n  {\n    id: 'cust_004',\n    name: 'DataBridge',\n    email: 'customer4@example.com',\n    plan: 'Pro',\n    mrr: 299,\n    last_payment_status: 'pending',\n    days_until_renewal: 10,\n    logins_last_14_days: 8,\n    key_features_used: ['dashboard', 'reports'],\n    open_tickets: 1,\n    last_ticket_sentiment: 'neutral',\n    signup_date: '2023-09-20',\n    active_users: 6\n  },\n  {\n    id: 'cust_005',\n    name: 'PixelForge',\n    email: 'customer5@example.com',\n    plan: 'Starter',\n    mrr: 99,\n    last_payment_status: 'failed',\n    days_until_renewal: 3,\n    logins_last_14_days: 3,\n    key_features_used: ['dashboard'],\n    open_tickets: 2,\n    last_ticket_sentiment: 'negative',\n    signup_date: '2024-05-12',\n    active_users: 2\n  }\n];\n\nreturn customers.map(c => ({ json: c }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-128, 592],
+      "id": "eaea65ed-d9ff-441e-99da-44b39708d200",
+      "name": "Mock Customers1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const customer = $input.item.json;\n\n// --- Calcul des scores par dimension ---\n\n// 1. Score connexions (30 pts)\nlet loginScore = 0;\nif (customer.logins_last_14_days >= 15) loginScore = 30;\nelse if (customer.logins_last_14_days >= 7) loginScore = 20;\nelse if (customer.logins_last_14_days >= 3) loginScore = 10;\nelse loginScore = 0;\n\n// 2. Score features (25 pts)\nconst featuresUsed = customer.key_features_used.length;\nlet featureScore = 0;\nif (featuresUsed >= 4) featureScore = 25;\nelse if (featuresUsed >= 2) featureScore = 15;\nelse if (featuresUsed >= 1) featureScore = 8;\nelse featureScore = 0;\n\n// 3. Score support (20 pts)\nlet supportScore = 20;\nif (customer.open_tickets >= 3) supportScore = 0;\nelse if (customer.open_tickets >= 1) supportScore = 10;\nif (customer.last_ticket_sentiment === \"very_negative\") supportScore -= 5;\nif (customer.last_ticket_sentiment === \"positive\") supportScore += 0;\nsupportScore = Math.max(0, supportScore);\n\n// 4. Score paiement (15 pts)\nlet paymentScore = 0;\nif (customer.last_payment_status === \"paid\") paymentScore = 15;\nelse if (customer.last_payment_status === \"pending\") paymentScore = 8;\nelse paymentScore = 0;\n\n// 5. Score renouvellement (10 pts)\nlet renewalScore = 0;\nif (customer.days_until_renewal > 14) renewalScore = 10;\nelse if (customer.days_until_renewal > 5) renewalScore = 6;\nelse renewalScore = 2;\n\n// --- Score total ---\nconst totalScore = loginScore + featureScore + supportScore + paymentScore + renewalScore;\n\n// --- Niveau de risque ---\nlet riskLevel = \"\";\nlet riskEmoji = \"\";\nif (totalScore >= 70) { riskLevel = \"FAIBLE\"; riskEmoji = \"🟢\"; }\nelse if (totalScore >= 40) { riskLevel = \"MOYEN\"; riskEmoji = \"🟡\"; }\nelse if (totalScore >= 20) { riskLevel = \"CRITIQUE\"; riskEmoji = \"🔴\"; }\nelse { riskLevel = \"TRES_CRITIQUE\"; riskEmoji = \"⚫\"; }\n\nreturn {\n  json: {\n    ...customer,\n    scores: {\n      login: loginScore,\n      feature: featureScore,\n      support: supportScore,\n      payment: paymentScore,\n      renewal: renewalScore,\n      total: totalScore\n    },\n    risk_level: riskLevel,\n    risk_emoji: riskEmoji,\n    scored_at: new Date().toISOString()\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [96, 592],
+      "id": "b4425403-fa74-4e69-a5ac-d065d356ee6a",
+      "name": "Health Score1"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "customers",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}",
+            "name": "={{ $json.name }}",
+            "email": "={{ $json.email }}",
+            "plan": "={{ $json.plan }}",
+            "mrr": "={{ $json.mrr }}",
+            "last_payment_status": "={{ $json.last_payment_status }}",
+            "days_until_renewal": "={{ $json.days_until_renewal }}",
+            "logins_last_14_days": "={{ $json.logins_last_14_days }}",
+            "key_features_used": "={{ ($json.key_features_used || []).join(', ') }}",
+            "open_tickets": "={{ $json.open_tickets }}",
+            "last_ticket_sentiment": "={{ $json.last_ticket_sentiment }}",
+            "signup_date": "={{ $json.signup_date }}",
+            "active_users": "={{ $json.active_users }}",
+            "risk_emoji": "={{ $json.risk_emoji }}",
+            "risk_level": "={{ $json.risk_level }}",
+            "score_total": "={{ $json.scores.total }}"
+          },
+          "matchingColumns": ["id"],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [304, 592],
+      "id": "b143becf-cf45-4d4a-a146-33cb7e65342f",
+      "name": "Append or update row in sheet1",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const c = $input.item.json;\n\nconst promptText = `Tu es un expert en Customer Success pour une entreprise SaaS.\nAnalyse ce profil client et génère un diagnostic structuré.\n\nCLIENT : ${c.name}\nPlan : ${c.plan} | MRR : $${c.mrr}/mois\nScore de santé : ${c.score_total}/100\nNiveau de risque : ${c.risk_level}\n\nSIGNAUX DÉTECTÉS :\n- Connexions (14 derniers jours) : ${c.logins_last_14_days}\n- Features utilisées : ${c.key_features_used || \"aucune\"}\n- Tickets support ouverts : ${c.open_tickets}\n- Sentiment dernier ticket : ${c.last_ticket_sentiment}\n- Statut paiement : ${c.last_payment_status}\n- Jours avant renouvellement : ${c.days_until_renewal}\n- Utilisateurs actifs : ${c.active_users}\n\nRéponds UNIQUEMENT avec le JSON brut.\nPas de texte avant, pas de backticks, pas d'explication.\nCommence directement par { et termine par }\n\n{\n  \"diagnostic\": \"2-3 phrases\",\n  \"raison_principale\": \"cause principale\",\n  \"action_recommandee\": \"action concrète\",\n  \"message_client\": \"email court prêt à envoyer\"\n}`;\n\nconst geminiBody = JSON.stringify({\n  contents: [\n    {\n      parts: [\n        { text: promptText }\n      ]\n    }\n  ],\n  generationConfig: {\n    temperature: 0.3,\n    maxOutputTokens: 2048,\n    responseMimeType: \"application/json\"\n  }\n});\n\nreturn {\n  json: {\n    ...c,\n    gemini_body: geminiBody\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 592],
+      "id": "b90b9b1b-33d2-459b-8bb9-da3fb240990f",
+      "name": "Build Prompt1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-goog-api-key",
+              "value": "={{ $env.GEMINI_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.gemini_body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [944, 592],
+      "id": "139e6840-f511-437e-a968-aa0b47108be0",
+      "name": "HTTP Request1",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const geminiResponse = $input.item.json;\n\n// Récupère les données client depuis le nœud Build Prompt\nconst customerData = $('Build Prompt1').item.json;\n\nconst rawResponse = geminiResponse.candidates?.[0]?.content?.parts?.[0]?.text || '';\n\nlet aiAnalysis;\ntry {\n  const clean = rawResponse.replace(/```json|```/g, '').trim();\n  aiAnalysis = JSON.parse(clean);\n} catch(e) {\n  aiAnalysis = {\n    diagnostic: rawResponse,\n    raison_principale: \"Erreur de parsing\",\n    action_recommandee: \"Vérifier manuellement\",\n    message_client: \"\"\n  };\n}\n\nreturn {\n  json: {\n    id: customerData.id,\n    name: customerData.name,\n    email: customerData.email,\n    score_total: customerData.score_total,\n    risk_level: customerData.risk_level,\n    ai_diagnostic: aiAnalysis.diagnostic,\n    ai_raison: aiAnalysis.raison_principale,\n    ai_action: aiAnalysis.action_recommandee,\n    ai_message_client: aiAnalysis.message_client\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1152, 592],
+      "id": "ba88d18b-4e2c-4b02-b8e4-78642e21d44a",
+      "name": "Parse Response1"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "customers",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}",
+            "name": "={{ $json.name }}",
+            "email": "={{ $json.email }}",
+            "score_total": "={{ $json.score_total }}",
+            "risk_level": "={{ $json.risk_level }}",
+            "ai_diagnostic": "={{ $json.ai_diagnostic }}",
+            "ai_raison": "={{ $json.ai_raison }}",
+            "ai_action": "={{ $json.ai_action }}",
+            "ai_message_client": "={{ $json.ai_message_client }}"
+          },
+          "matchingColumns": ["id"],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [1360, 592],
+      "id": "7a38a71a-46bc-48a4-a5bb-6a9d1e38c0d7",
+      "name": "Update row in sheet1"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.risk_level }}",
+                    "rightValue": "FAIBLE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "b46f1e4f-c13e-4fe9-91ac-7860f2469622"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "ca80a815-1fc5-4ee1-aa62-b5650c8942a7",
+                    "leftValue": "={{ $json.risk_level }}",
+                    "rightValue": "MOYEN",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "f7f690ff-74d7-4cdb-9af5-7cee9e9122e8",
+                    "leftValue": "={{ $json.risk_level }}",
+                    "rightValue": "CRITIQUE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "9b38cfa9-4724-40d7-b145-7b31cd151e60",
+                    "leftValue": "={{ $json.risk_level }}",
+                    "rightValue": "TRES_CRITIQUE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [1568, 592],
+      "id": "c5f19816-7240-478d-81ad-4d58ae7273e5",
+      "name": "Switch1"
+    },
+    {
+      "parameters": {
+        "sendTo": "YOUR_TEST_EMAIL@example.com",
+        "subject": "={{ $json.name }} — quelques ressources pour vous aider",
+        "message": "={{ $json.ai_message_client }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [1856, 352],
+      "id": "aec3b7ba-c08c-4b65-87a1-77ad6ee7ece2",
+      "name": "Gmail MOYEN1"
+    },
+    {
+      "parameters": {
+        "sendTo": "YOUR_TEST_EMAIL@example.com",
+        "subject": "=Action requise — votre compte {{ $json.name }}",
+        "message": "={{ $json.ai_message_client }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [1968, 704],
+      "id": "29ed2a05-a6e6-484d-b824-7997c6e71e07",
+      "name": "Gmail CRITIQUE1",
+      "retryOnFail": true,
+      "maxTries": 5
+    },
+    {
+      "parameters": {
+        "sendTo": "YOUR_TEST_EMAIL@example.com",
+        "subject": "=🚨 Urgent — {{ $json.name }} nous avons remarqué un problème",
+        "message": "={{ $json.ai_message_client }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [1808, 880],
+      "id": "ff3a8c5f-bb93-4745-8131-a6e23939acce",
+      "name": "Gmail TRES_CRITIQUE1"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger1": {
+      "main": [[{ "node": "Mock Customers1", "type": "main", "index": 0 }]]
+    },
+    "Mock Customers1": {
+      "main": [[{ "node": "Health Score1", "type": "main", "index": 0 }]]
+    },
+    "Health Score1": {
+      "main": [[{ "node": "Append or update row in sheet1", "type": "main", "index": 0 }]]
+    },
+    "Append or update row in sheet1": {
+      "main": [[{ "node": "Build Prompt1", "type": "main", "index": 0 }]]
+    },
+    "Build Prompt1": {
+      "main": [[{ "node": "HTTP Request1", "type": "main", "index": 0 }]]
+    },
+    "HTTP Request1": {
+      "main": [[{ "node": "Parse Response1", "type": "main", "index": 0 }]]
+    },
+    "Parse Response1": {
+      "main": [[{ "node": "Update row in sheet1", "type": "main", "index": 0 }]]
+    },
+    "Update row in sheet1": {
+      "main": [[{ "node": "Switch1", "type": "main", "index": 0 }]]
+    },
+    "Switch1": {
+      "main": [
+        [],
+        [{ "node": "Gmail MOYEN1", "type": "main", "index": 0 }],
+        [{ "node": "Gmail CRITIQUE1", "type": "main", "index": 0 }],
+        [{ "node": "Gmail TRES_CRITIQUE1", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {}
+}
